@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { geoData } from '@/lib/geoData'
 
 const LiveMap = dynamic(() => import('@/components/LiveMap'), {
   ssr: false,
@@ -25,16 +26,10 @@ export default function Dashboard() {
   const [selectedInterv, setSelectedInterv] = useState('')
   const [reportStep, setReportStep] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [selectedState, setSelectedState] = useState('Delhi')
-  const [selectedDistrict, setSelectedDistrict] = useState('New Delhi')
+  const [selectedState, setSelectedState] = useState('India (National)')
+  const [selectedDistrict, setSelectedDistrict] = useState('All India')
   const [showSimulator, setShowSimulator] = useState(false)
-
-  const geoData: Record<string, any> = {
-    'Delhi': { coords: [28.6139, 77.2090], zoom: 10, districts: {'New Delhi': {coords: [28.6139, 77.2090], zoom: 12}, 'North Delhi': {coords: [28.8045, 77.1025], zoom: 12}, 'South Delhi': {coords: [28.4842, 77.1852], zoom: 12}, 'Okhla': {coords: [28.5200, 77.2800], zoom: 13}, 'Anand Vihar': {coords: [28.6500, 77.3000], zoom: 13}} },
-    'Haryana': { coords: [29.0588, 76.0856], zoom: 8, districts: {'Gurugram': {coords: [28.4595, 77.0266], zoom: 12}, 'Faridabad': {coords: [28.4089, 77.3178], zoom: 12}, 'Panipat': {coords: [29.3909, 76.9635], zoom: 12}} },
-    'Uttar Pradesh': { coords: [26.8467, 80.9462], zoom: 7, districts: {'Noida': {coords: [28.5355, 77.3910], zoom: 12}, 'Ghaziabad': {coords: [28.6692, 77.4538], zoom: 12}} },
-    'Punjab': { coords: [31.1471, 75.3412], zoom: 8, districts: {'Amritsar': {coords: [31.6340, 74.8723], zoom: 12}, 'Ludhiana': {coords: [30.9010, 75.8573], zoom: 12}} }
-  }
+  const [activeIncident, setActiveIncident] = useState<any>(null)
 
   const activeGeo = geoData[selectedState]?.districts[selectedDistrict] || geoData[selectedState];
   const activeCoords = activeGeo?.coords || [28.6139, 77.2090];
@@ -54,16 +49,18 @@ export default function Dashboard() {
   }, [isPlaying])
 
   useEffect(() => {
-    // Initial fetch from DB
-    fetch('http://localhost:8000/incidents/')
+    // Initial fetch from DB via proxy rewrite
+    fetch('/api/incidents/')
       .then(r => r.json())
       .then(data => {
         if (data && Array.isArray(data)) setIncidents(data);
       })
       .catch(e => console.error("Failed to fetch incidents", e));
 
-    // Connect WebSocket
-    const ws = new WebSocket('ws://localhost:8000/ws/incidents');
+    // Connect WebSocket via relative URL
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/incidents`;
+    const ws = new WebSocket(wsUrl);
     ws.onmessage = (event) => {
       try {
         const newIncident = JSON.parse(event.data);
@@ -127,8 +124,8 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-[#9dd0cd] text-[22px]">hub</span>
             </div>
             <div>
-              <h2 className="font-display text-sm font-bold text-[#9dd0cd] leading-tight">Delhi NCR</h2>
-              <p className="text-[9px] text-[#c0c8c7] tracking-widest uppercase font-bold mt-0.5">Fused Intel Layer</p>
+              <h2 className="font-display text-sm font-bold text-[#9dd0cd] leading-tight max-w-[130px] truncate">{selectedState === 'India (National)' ? 'Pan-India' : selectedState}</h2>
+              <p className="text-[9px] text-[#c0c8c7] tracking-widest uppercase font-bold mt-0.5">Operations Center</p>
             </div>
           </div>
         </div>
@@ -185,7 +182,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 px-3 py-1 bg-[#26364a]/50 rounded-full border border-[#404848]/30">
               <span className="w-1.5 h-1.5 rounded-full bg-[#9dd0cd]"></span>
-              <span className="text-[10px] font-bold text-[#c0c8c7] uppercase tracking-widest">ADMIN ACCESS: DELHI-HQ</span>
+              <span className="text-[10px] font-bold text-[#c0c8c7] uppercase tracking-widest">ADMIN ACCESS: NATIONAL-HQ</span>
             </div>
             <div className="relative hidden lg:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#c0c8c7]" size={16} />
@@ -206,7 +203,7 @@ export default function Dashboard() {
               <motion.div key="dash" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="p-8 pb-16">
                 <div className="flex justify-between items-end mb-8">
                   <div>
-                    <h1 className="text-3xl font-display text-[#9dd0cd]">Evidence Fusion: Delhi-NCR Operations</h1>
+                    <h1 className="text-3xl font-display text-[#9dd0cd]">Evidence Fusion: {selectedState === 'India (National)' ? 'Pan-India' : selectedState} Operations</h1>
                     <p className="text-[#c0c8c7] mt-1">Multi-Signal Fusion Intelligence for real-time municipal response orchestration.</p>
                   </div>
                   <div className="flex items-center gap-3 text-xs font-bold text-[#c0c8c7] uppercase tracking-widest border border-[#404848]/30 rounded px-3 py-1 bg-[#000f21]">
@@ -305,7 +302,7 @@ export default function Dashboard() {
                   <div className="col-span-12 lg:col-span-8 bg-[#102034] border border-[#404848] rounded flex flex-col mt-2">
                     <div className="px-6 py-4 border-b border-[#404848] flex justify-between items-center">
                       <h3 className="text-[10px] text-[#9dd0cd] tracking-widest font-bold uppercase">High-Impact Fused Hotspots</h3>
-                      <span className="text-[#c0c8c7] text-[10px] font-bold uppercase tracking-wider">6 Critical Delhi Wards Detected</span>
+                      <span className="text-[#c0c8c7] text-[10px] font-bold uppercase tracking-wider">Top Detected Zones</span>
                     </div>
                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex gap-4 bg-[#0b1c30] p-4 rounded border border-[#404848]/50">
@@ -378,10 +375,69 @@ export default function Dashboard() {
                     showPredictions={showPredictions} 
                     coords={activeCoords} 
                     zoom={activeZoom} 
-                    liveIncidents={incidents} 
+                    liveIncidents={incidents}
+                    onIncidentClick={(inc: any) => setActiveIncident(inc)}
                   />
                 </div>
                 
+                {/* Intel Panel Overlay */}
+                <AnimatePresence>
+                  {activeIncident && (
+                    <motion.div 
+                      initial={{x: 300, opacity: 0}}
+                      animate={{x: 0, opacity: 1}}
+                      exit={{x: 300, opacity: 0}}
+                      className="absolute right-4 top-4 bottom-4 w-80 bg-[#0b1c30]/95 backdrop-blur border border-[#404848] rounded-lg shadow-2xl z-30 p-5 overflow-y-auto"
+                    >
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <h2 className="text-[#9dd0cd] uppercase tracking-widest text-xs font-bold mb-1">Live Intel Report</h2>
+                          <span className="text-[#c0c8c7] text-sm font-medium">#{activeIncident.id || 'N/A'}</span>
+                        </div>
+                        <button onClick={() => setActiveIncident(null)} className="text-[#8a9291] hover:text-white transition-colors">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="bg-[#102034] p-3 rounded border border-[#1b2b3f]">
+                          <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest block mb-1">Classification</span>
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle size={14} className="text-[#ffb4ab]" />
+                            <span className="text-[#d3e4fe] font-bold text-sm">{activeIncident.type || 'Unknown'}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="bg-[#102034] p-3 rounded border border-[#1b2b3f]">
+                            <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest block mb-1">Severity</span>
+                            <span className={`text-sm font-bold ${activeIncident.severity === 'Critical' ? 'text-magenta-500' : 'text-[#ffb4ab]'}`}>{activeIncident.severity || 'High'}</span>
+                          </div>
+                          <div className="bg-[#102034] p-3 rounded border border-[#1b2b3f]">
+                            <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest block mb-1">AI Confidence</span>
+                            <span className="text-sm font-bold text-[#9dd0cd]">{(activeIncident.confidence * 100).toFixed(1)}%</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#102034] p-3 rounded border border-[#1b2b3f]">
+                          <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest block mb-1">Description</span>
+                          <p className="text-sm text-[#d3e4fe] leading-relaxed">{activeIncident.description}</p>
+                        </div>
+
+                        <div className="bg-[#102034] p-3 rounded border border-[#1b2b3f]">
+                          <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest block mb-1">Coordinates</span>
+                          <p className="text-xs text-[#9dd0cd] font-mono">{activeIncident.lat.toFixed(6)}, {activeIncident.lng.toFixed(6)}</p>
+                        </div>
+
+                        <button onClick={() => {setActiveTab('incidents'); setActiveIncident(null);}} className="w-full mt-4 py-2 bg-[#1b2b3f] text-[#c0c8c7] border border-[#404848] rounded hover:text-white transition-colors uppercase font-bold text-[10px] tracking-widest flex items-center justify-center gap-2">
+                          <span>View Full Record</span>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="absolute top-4 left-4 z-20 flex items-center gap-4">
                   <span className="bg-[#102034]/90 backdrop-blur px-4 py-2 rounded text-[#9dd0cd] font-bold border border-[#404848] text-sm shadow-[0_0_15px_rgba(157,208,205,0.2)]">
                     Operational Live Map

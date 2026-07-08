@@ -14,24 +14,13 @@ interface LiveMapProps {
   coords: [number, number];
   zoom: number;
   liveIncidents: Incident[];
+  onIncidentClick?: (inc: Incident) => void;
 }
 
-export default function LiveMap({ timelineFactor, showPredictions, coords, zoom, liveIncidents }: LiveMapProps) {
+export default function LiveMap({ timelineFactor, showPredictions, coords, zoom, liveIncidents, onIncidentClick }: LiveMapProps) {
   const mapRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [heatData] = useState(() => {
-    // Generate static heat background once
-    const pts = [];
-    for(let i=0; i<300; i++) {
-        const lat = 28.5 + (Math.random() * 0.4);
-        const lng = 77.0 + (Math.random() * 0.5);
-        const dist = Math.sqrt(Math.pow(lat - 28.6, 2) + Math.pow(lng - 77.2, 2));
-        const intensity = Math.max(0, 0.6 - dist * 2) * Math.random();
-        if (intensity > 0.1) pts.push([lat, lng, intensity]);
-    }
-    return pts;
-  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -105,24 +94,27 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
             iconSize: [14, 14],
             iconAnchor: [7, 7]
         });
-        L.marker([inc.lat, inc.lng], {icon, id: 'marker'}).addTo(map).bindPopup(`<b>Live Incident</b><br>${inc.description}`);
+        const m = L.marker([inc.lat, inc.lng], {icon, id: 'marker'}).addTo(map);
+        if (onIncidentClick) {
+            m.on('click', () => onIncidentClick(inc));
+        } else {
+            m.bindPopup(`<b>Live Incident</b><br>${inc.description}`);
+        }
     });
 
-    // Calculate Drift
-    const timePassed = 24 + timelineFactor;
-    const driftLat = -(timePassed / 24) * 0.12; 
-    const driftLng = (timePassed / 24) * 0.12;
-    
-    const currentHeat = heatData.map((p: any) => [
-        p[0] + driftLat, p[1] + driftLng, Math.max(0, p[2] + Math.sin(timePassed + p[0]*100)*0.15)
-    ]);
-
+    // Real Backend Data rendering (No Fake Jitter)
+    const currentHeat: any[] = [];
     liveIncidents.forEach((inc: any) => {
-        for(let j=0; j<20; j++) {
+        // Use AI confidence or 0.8 as the core intensity
+        const baseIntensity = inc.confidence || 0.8;
+        currentHeat.push([inc.lat, inc.lng, baseIntensity]);
+        
+        // Add slight realistic spread around the specific incident (not global screen noise)
+        for(let j=0; j<3; j++) {
             currentHeat.push([
-                inc.lat + (Math.random()-0.5)*0.05, 
-                inc.lng + (Math.random()-0.5)*0.05, 
-                0.8
+                inc.lat + (Math.random()-0.5)*0.02, 
+                inc.lng + (Math.random()-0.5)*0.02, 
+                baseIntensity * 0.5
             ]);
         }
     });
@@ -140,7 +132,7 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
             id: 'heat'
         }).addTo(map);
     }
-  }, [timelineFactor, showPredictions, liveIncidents, isLoaded, heatData]);
+  }, [timelineFactor, showPredictions, liveIncidents, isLoaded]);
 
   useEffect(() => {
     if (isLoaded && mapRef.current) {
