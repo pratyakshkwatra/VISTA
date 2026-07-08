@@ -12,3 +12,4 @@ geoalchemy2>=0.15.1
 psycopg2-binary>=2.9.9
 google-genai>=0.2.0
 google-antigravity
+reportlab>=4.2.0

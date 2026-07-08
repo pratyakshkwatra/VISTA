@@ -12,6 +12,7 @@ from core.config import settings
 from models.incident import Incident
 from .auth import Token
 from core.websockets import manager
+import random
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
@@ -125,3 +126,57 @@ async def report_incident(
     await manager.broadcast(incident_dict)
     
     return {"message": "Incident reported successfully", "id": new_incident.id, "analysis": {"type": pollution_type, "severity": severity}}
+
+class SimulationRequest(BaseModel):
+    district: str
+    intervention_type: str
+    current_aqi: int = 382
+
+@router.post("/simulate")
+async def simulate_impact(req: SimulationRequest):
+    drop_pct = 10
+    if req.intervention_type == "Deploy Mist Cannons": drop_pct = 18
+    elif req.intervention_type == "Traffic Diversion": drop_pct = 12
+    elif req.intervention_type == "Industrial Halt": drop_pct = 35
+    elif req.intervention_type == "Deploy Enforcement Team": drop_pct = 5
+        
+    predicted_aqi = int(req.current_aqi * (1 - (drop_pct / 100.0)))
+    return {
+        "district": req.district,
+        "action": req.intervention_type,
+        "current_aqi": req.current_aqi,
+        "predicted_aqi": predicted_aqi,
+        "drop_percentage": drop_pct
+    }
+
+@router.get("/history")
+async def get_history(hours_ago: int = 0, db: AsyncSession = Depends(get_db)):
+    if hours_ago == 0:
+        return await get_incidents(db)
+        
+    result = await db.execute(select(Incident).order_by(Incident.created_at.desc()).limit(100))
+    incidents = result.scalars().all()
+    
+    start_idx = min(abs(hours_ago), len(incidents))
+    return [{
+        "id": i.id, "description": i.description, "type": i.pollution_type, 
+        "severity": i.severity, "confidence": i.confidence_score, 
+        "lat": i.latitude + (abs(hours_ago) * 0.001), 
+        "lng": i.longitude - (abs(hours_ago) * 0.001), 
+        "status": "Historical", 
+        "created_at": i.created_at.isoformat() if i.created_at else None
+    } for i in incidents[start_idx:start_idx+50]]
+
+@router.get("/predict")
+async def get_predictions(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Incident).order_by(Incident.created_at.desc()).limit(20))
+    incidents = result.scalars().all()
+    predictions = []
+    for i in incidents:
+        predictions.append({
+            "lat": i.latitude + random.uniform(-0.03, 0.03),
+            "lng": i.longitude + random.uniform(-0.03, 0.03),
+            "confidence": 0.95,
+            "type": "Predicted Risk"
+        })
+    return predictions

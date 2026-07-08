@@ -30,6 +30,45 @@ export default function Dashboard() {
   const [selectedDistrict, setSelectedDistrict] = useState('All India')
   const [showSimulator, setShowSimulator] = useState(false)
   const [activeIncident, setActiveIncident] = useState<any>(null)
+  
+  const [simResult, setSimResult] = useState<any>(null);
+  const [predictedIncidents, setPredictedIncidents] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState<any[]>([{role: 'assistant', content: 'VISTA Copilot initialized. How can I assist you with urban intelligence today?'}]);
+
+  const generateReport = async () => {
+    setReportStep(2);
+    try {
+      const res = await fetch('/api/reports/generate', { method: 'POST' });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "VISTA_Audit_Trail.pdf";
+      a.click();
+      setReportStep(3);
+    } catch(e) {
+      setReportStep(0);
+    }
+  }
+
+  const sendChat = async () => {
+    if(!chatInput) return;
+    const newHist = [...chatHistory, {role: 'user', content: chatInput}];
+    setChatHistory(newHist);
+    setChatInput('');
+    try {
+      const res = await fetch('/api/copilot/ask', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query: chatInput})
+      });
+      const data = await res.json();
+      setChatHistory([...newHist, {role: 'assistant', content: data.response}]);
+    } catch(e) {
+      console.error(e);
+    }
+  }
 
   const activeGeo = geoData[selectedState]?.districts[selectedDistrict] || geoData[selectedState];
   const activeCoords = activeGeo?.coords || [28.6139, 77.2090];
@@ -49,14 +88,23 @@ export default function Dashboard() {
   }, [isPlaying])
 
   useEffect(() => {
-    // Initial fetch from DB via proxy rewrite
-    fetch('/api/incidents/')
+    fetch(`/api/incidents/history?hours_ago=${Math.abs(historicalDay)}`)
       .then(r => r.json())
       .then(data => {
         if (data && Array.isArray(data)) setIncidents(data);
       })
       .catch(e => console.error("Failed to fetch incidents", e));
+  }, [historicalDay])
 
+  useEffect(() => {
+    if (showPredictions) {
+      fetch('/api/incidents/predict')
+        .then(r => r.json())
+        .then(data => setPredictedIncidents(data));
+    }
+  }, [showPredictions])
+
+  useEffect(() => {
     // Connect WebSocket via relative URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/incidents`;
@@ -375,7 +423,7 @@ export default function Dashboard() {
                     showPredictions={showPredictions} 
                     coords={activeCoords} 
                     zoom={activeZoom} 
-                    liveIncidents={incidents}
+                    liveIncidents={showPredictions ? [...incidents, ...predictedIncidents] : incidents}
                     onIncidentClick={(inc: any) => setActiveIncident(inc)}
                   />
                 </div>
@@ -476,7 +524,20 @@ export default function Dashboard() {
                               <h3 className="text-xs font-bold text-[#d3e4fe] uppercase tracking-widest mb-4">Select Municipal Action</h3>
                               <div className="space-y-2">
                                 {['Deploy Mist Cannons', 'Traffic Diversion', 'Industrial Halt', 'Deploy Enforcement Team'].map(a => (
-                                  <button key={a} onClick={() => {setSelectedInterv(a); setInterventionStep(3);}} className="w-full p-3 border text-left rounded transition-colors border-[#404848] hover:border-[#9dd0cd]/50 text-[#c0c8c7] text-sm">
+                                  <button key={a} onClick={async () => {
+                                    setSelectedInterv(a); 
+                                    setInterventionStep(2);
+                                    try {
+                                        const res = await fetch('/api/incidents/simulate', {
+                                            method: 'POST',
+                                            headers: {'Content-Type': 'application/json'},
+                                            body: JSON.stringify({ district: selectedDistrict, intervention_type: a, current_aqi: 382 })
+                                        });
+                                        const data = await res.json();
+                                        setSimResult(data);
+                                        setInterventionStep(3);
+                                    } catch(e) { setInterventionStep(3); }
+                                  }} className="w-full p-3 border text-left rounded transition-colors border-[#404848] hover:border-[#9dd0cd]/50 text-[#c0c8c7] text-sm">
                                     {a}
                                   </button>
                                 ))}
@@ -493,11 +554,11 @@ export default function Dashboard() {
                               <div className="bg-[#0b1c30] border border-[#404848] p-4 rounded text-left mb-6">
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest">Current AQI</span>
-                                  <span className="text-sm font-bold text-[#ffb4ab]">382</span>
+                                  <span className="text-sm font-bold text-[#ffb4ab]">{simResult?.current_aqi || 382}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <span className="text-[10px] text-[#c0c8c7] uppercase tracking-widest">Predicted</span>
-                                  <span className="text-sm font-bold text-[#9dd0cd]">315 (-18%)</span>
+                                  <span className="text-sm font-bold text-[#9dd0cd]">{simResult?.predicted_aqi || 315} (-{simResult?.drop_percentage || 18}%)</span>
                                 </div>
                               </div>
                               <button onClick={() => {setInterventionStep(1); setSelectedInterv('');}} className="w-full py-2 bg-[#1b2b3f] text-[#c0c8c7] border border-[#404848] rounded hover:text-white transition-colors uppercase font-bold text-[10px] tracking-widest">Run New Simulation</button>
@@ -620,12 +681,12 @@ export default function Dashboard() {
                         <motion.div key="rstep1" initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="text-center w-full max-w-2xl">
                           <h2 className="text-2xl font-bold text-white mb-6">Select Report Type</h2>
                           <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => setReportStep(2)} className="p-6 border border-[#404848] hover:border-[#9dd0cd] bg-[#0b1c30] rounded-xl transition-colors">
+                            <button onClick={generateReport} className="p-6 border border-[#404848] hover:border-[#9dd0cd] bg-[#0b1c30] rounded-xl transition-colors">
                               <FileText size={32} className="text-[#9dd0cd] mx-auto mb-3" />
                               <h3 className="font-bold text-white">Emissions Audit</h3>
                               <p className="text-xs text-[#c0c8c7] mt-1">Statutory particulate matter log</p>
                             </button>
-                            <button onClick={() => setReportStep(2)} className="p-6 border border-[#404848] hover:border-[#9dd0cd] bg-[#0b1c30] rounded-xl transition-colors">
+                            <button onClick={generateReport} className="p-6 border border-[#404848] hover:border-[#9dd0cd] bg-[#0b1c30] rounded-xl transition-colors">
                               <History size={32} className="text-[#9dd0cd] mx-auto mb-3" />
                               <h3 className="font-bold text-white">Intervention Efficacy</h3>
                               <p className="text-xs text-[#c0c8c7] mt-1">Impact of deployed responses</p>
@@ -663,52 +724,38 @@ export default function Dashboard() {
             {activeTab === 'copilot' && (
               <motion.div key="copilot" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="p-8 h-full flex flex-col pb-16">
                 <div className="flex-1 flex flex-col max-w-4xl mx-auto border border-[#9dd0cd]/30 rounded-xl bg-[#0b1c30]/90 backdrop-blur-xl overflow-hidden shadow-[0_0_30px_rgba(157,208,205,0.1)] w-full">
-                   <div className="flex-1 p-6 overflow-y-auto space-y-6">
-                      <div className="flex gap-4">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#9dd0cd] to-[#2a5c5a] flex items-center justify-center shrink-0 shadow-lg">
-                          <Bot className="text-[#003735]" size={20} />
-                        </div>
-                        <div className="bg-[#102034] p-6 rounded-2xl rounded-tl-none border border-[#404848] space-y-4 shadow-xl">
-                          <p className="text-sm text-[#d3e4fe] leading-relaxed">
-                              Hello Admin. The VISTA AI engine has correlated the recent AQI spike (412) in Ward 178. Evidence points include: (1) DPCC Sensor H-14 real-time telemetry, (2) 8 validated citizen reports with geo-tagged images of construction dust near Okhla Ind Area, and (3) Satellite-based thermal signatures.
-                          </p>
-                          <ActionButton id="copilotAction" text="Deploy Intervention" />
-                        </div>
-                      </div>
-                   </div>
-                   <div className="p-4 bg-[#102034]/90 backdrop-blur-md border-t border-[#404848]">
+                    <div className="flex-1 p-6 overflow-y-auto space-y-6">
+                      {chatHistory.map((msg, idx) => (
+                         <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#9dd0cd] to-[#2a5c5a] flex items-center justify-center shrink-0 shadow-lg">
+                             {msg.role === 'user' ? <span className="text-[#003735] font-bold">U</span> : <Bot className="text-[#003735]" size={20} />}
+                           </div>
+                           <div className={`p-4 rounded-2xl border border-[#404848] shadow-xl max-w-[80%] ${msg.role === 'user' ? 'bg-[#9dd0cd]/10 text-white rounded-tr-none' : 'bg-[#102034] text-[#d3e4fe] rounded-tl-none'}`}>
+                             <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                           </div>
+                         </div>
+                      ))}
+                    </div>
+                    <div className="p-4 bg-[#102034]/90 backdrop-blur-md border-t border-[#404848]">
                       <div className="relative">
                         <textarea 
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
                           className="w-full bg-[#0b1c30] border border-[#404848] rounded-xl p-4 text-sm text-white outline-none resize-none focus:border-[#9dd0cd]/50 transition-colors shadow-inner" 
                           placeholder="Ask the AI Copilot to analyze data..." 
                           rows={1}
                           onKeyDown={async (e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
-                              const val = e.currentTarget.value;
-                              if (!val) return;
-                              e.currentTarget.value = 'Asking Copilot...';
-                              try {
-                                const res = await fetch('http://localhost:8000/copilot/ask', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ query: val })
-                                });
-                                const data = await res.json();
-                                alert(data.response);
-                                e.currentTarget.value = '';
-                              } catch (err) {
-                                alert('Copilot API is currently unreachable. Ensure backend is running.');
-                                e.currentTarget.value = val;
-                              }
+                              sendChat();
                             }
                           }}
                         ></textarea>
-                        <button className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-[#9dd0cd] text-[#003735] rounded-lg flex items-center justify-center hover:brightness-110 transition-all shadow-lg">
+                        <button onClick={sendChat} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-[#9dd0cd] text-[#003735] rounded-lg flex items-center justify-center hover:brightness-110 transition-all shadow-lg">
                           <Search size={18} />
                         </button>
                       </div>
-                   </div>
+                    </div>
                 </div>
               </motion.div>
             )}

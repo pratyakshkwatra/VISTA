@@ -1,5 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from 'react';
+import { useState, useMemo } from 'react';
+import Map from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { DeckGL } from '@deck.gl/react';
+import { HexagonLayer, ScatterplotLayer } from '@deck.gl/aggregation-layers';
 
 interface Incident {
   lat: number;
@@ -18,127 +22,94 @@ interface LiveMapProps {
 }
 
 export default function LiveMap({ timelineFactor, showPredictions, coords, zoom, liveIncidents, onIncidentClick }: LiveMapProps) {
-  const mapRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [viewState, setViewState] = useState({
+    longitude: coords[1],
+    latitude: coords[0],
+    zoom: zoom - 1, // DeckGL zoom is slightly different
+    pitch: 45,
+    bearing: 0
+  });
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  useMemo(() => {
+    setViewState(v => ({...v, longitude: coords[1], latitude: coords[0], zoom: zoom - 1, transitionDuration: 1000}));
+  }, [coords, zoom]);
 
-    if (!(window as any).L) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
+  const data = liveIncidents.map(i => ({
+    position: [i.lng, i.lat],
+    confidence: i.confidence || 0.8,
+    ...i
+  }));
 
-        const script1 = document.createElement('script');
-        script1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        
-        script1.onload = () => {
-          const script2 = document.createElement('script');
-          script2.src = 'https://unpkg.com/leaflet.heat/dist/leaflet-heat.js';
-          script2.onload = initMap;
-          document.head.appendChild(script2);
-        };
-        document.head.appendChild(script1);
-    } else {
-        initMap();
-    }
-
-    return () => {
-      if (mapRef.current) mapRef.current.remove();
-    };
-  }, []);
-
-  const initMap = () => {
-    if (!containerRef.current) return;
-    const L = (window as any).L;
-    
-    // Add pulsing CSS
-    if (!document.getElementById('pulse-css')) {
-        const style = document.createElement('style');
-        style.id = 'pulse-css';
-        style.innerHTML = '@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 180, 171, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 180, 171, 0); } }';
-        document.head.appendChild(style);
-    }
-
-    const map = L.map(containerRef.current, { zoomControl: false }).setView([coords[0], coords[1]], zoom);
-    mapRef.current = map;
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap contributors',
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
-
-    setIsLoaded(true);
-  };
-
-  useEffect(() => {
-    if (!isLoaded || !mapRef.current) return;
-    const L = (window as any).L;
-    const map = mapRef.current;
-    
-    // Clear old layers
-    map.eachLayer((layer: any) => {
-      if (layer.options && (layer.options.id === 'heat' || layer.options.id === 'prediction' || layer.options.icon)) {
-        map.removeLayer(layer);
+  const layers = [
+    new HexagonLayer({
+      id: 'heatmap',
+      data,
+      pickable: true,
+      extruded: true,
+      radius: 2000,
+      elevationScale: 50,
+      getPosition: (d: any) => d.position,
+      getElevationValue: (points: any[]) => {
+         return points.reduce((acc, pt) => acc + (pt.confidence || 1), 0);
+      },
+      getColorValue: (points: any[]) => {
+         return points.reduce((acc, pt) => acc + (pt.confidence || 1), 0);
+      },
+      colorRange: showPredictions 
+        ? [
+            [0, 255, 255], [0, 150, 255], [100, 0, 255], [255, 0, 255], [255, 50, 255], [255, 100, 255]
+          ]
+        : [
+            [1, 152, 189], [73, 227, 206], [216, 254, 181], [254, 237, 177], [254, 173, 84], [209, 55, 78]
+          ],
+      opacity: 0.8,
+      transitions: {
+        elevationScale: 1000
       }
-    });
-
-    // Render Markers
-    liveIncidents.forEach((inc: any) => {
-        const icon = L.divIcon({
-            className: 'custom-icon',
-            html: '<div style="background-color: #ffb4ab; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #93000a; box-shadow: 0 0 15px #ffb4ab; animation: pulse 2s infinite;"></div>',
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-        });
-        const m = L.marker([inc.lat, inc.lng], {icon, id: 'marker'}).addTo(map);
-        if (onIncidentClick) {
-            m.on('click', () => onIncidentClick(inc));
-        } else {
-            m.bindPopup(`<b>Live Incident</b><br>${inc.description}`);
+    }),
+    new ScatterplotLayer({
+      id: 'markers',
+      data,
+      pickable: true,
+      opacity: 0.8,
+      stroked: true,
+      filled: true,
+      radiusScale: 50,
+      radiusMinPixels: 4,
+      radiusMaxPixels: 15,
+      lineWidthMinPixels: 2,
+      getPosition: (d: any) => d.position,
+      getFillColor: [255, 180, 171],
+      getLineColor: [147, 0, 10],
+      onClick: (info: any) => {
+        if (info.object && onIncidentClick) {
+          onIncidentClick(info.object);
         }
-    });
+      }
+    })
+  ];
 
-    // Real Backend Data rendering (No Fake Jitter)
-    const currentHeat: any[] = [];
-    liveIncidents.forEach((inc: any) => {
-        // Use AI confidence or 0.8 as the core intensity
-        const baseIntensity = inc.confidence || 0.8;
-        currentHeat.push([inc.lat, inc.lng, baseIntensity]);
-        
-        // Add slight realistic spread around the specific incident (not global screen noise)
-        for(let j=0; j<3; j++) {
-            currentHeat.push([
-                inc.lat + (Math.random()-0.5)*0.02, 
-                inc.lng + (Math.random()-0.5)*0.02, 
-                baseIntensity * 0.5
-            ]);
-        }
-    });
-
-    if (showPredictions) {
-        L.heatLayer(currentHeat.map((p:any) => [p[0], p[1], p[2]]), {
-            radius: 25, blur: 20, maxZoom: 11,
-            gradient: {0.4: 'cyan', 0.6: 'blue', 0.8: 'purple', 1.0: 'magenta'},
-            id: 'prediction'
-        }).addTo(map);
-    } else {
-        L.heatLayer(currentHeat, {
-            radius: 20, blur: 15, maxZoom: 11,
-            gradient: {0.4: 'blue', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'},
-            id: 'heat'
-        }).addTo(map);
-    }
-  }, [timelineFactor, showPredictions, liveIncidents, isLoaded]);
-
-  useEffect(() => {
-    if (isLoaded && mapRef.current) {
-        mapRef.current.flyTo([coords[0], coords[1]], zoom, {animate: true, duration: 1.5});
-    }
-  }, [coords, zoom, isLoaded]);
-
-  return <div ref={containerRef} className="w-full h-full bg-[#102034] relative z-0" />;
+  return (
+    <div className="w-full h-full relative z-0">
+      <DeckGL
+        viewState={viewState}
+        controller={true}
+        layers={layers}
+        onViewStateChange={e => setViewState(e.viewState as any)}
+        getTooltip={(info: any) => {
+          if (info.layer?.id === 'markers' && info.object) {
+             return info.object.description || 'Incident';
+          }
+          if (info.layer?.id === 'heatmap' && info.object) {
+             return `Density: ${info.object.points.length} Reports`;
+          }
+          return null;
+        }}
+      >
+        <Map
+          mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        />
+      </DeckGL>
+    </div>
+  );
 }

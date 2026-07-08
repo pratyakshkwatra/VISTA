@@ -24,11 +24,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from api import auth, incidents, copilot
+from api import auth, incidents, copilot, reports
 
 app.include_router(auth.router)
 app.include_router(incidents.router)
 app.include_router(copilot.router)
+app.include_router(reports.router)
 
 @app.get("/")
 async def root():
