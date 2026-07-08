@@ -12,6 +12,111 @@ const LiveMap = dynamic(() => import('@/components/LiveMap'), {
 import { motion, AnimatePresence } from 'framer-motion'
 import { LayoutDashboard, Map as MapIcon, AlertTriangle, TrendingUp, Zap, History, FileText, Bot, Search, Bell, CheckCircle, Loader2, Play, Pause } from 'lucide-react'
 
+type ChatNode = {
+  text: string;
+  options: { label: string; nextNode: string }[];
+};
+
+const copilotTree: Record<string, ChatNode> = {
+  ROOT: {
+    text: 'VISTA Automated Intelligence System initialized. Please select a module to interact with:',
+    options: [
+      { label: '1. Incident Reporting & Analysis', nextNode: 'INCIDENTS' },
+      { label: '2. Predictive Modeling & AQI', nextNode: 'PREDICTIONS' },
+      { label: '3. Emergency Municipal Response', nextNode: 'EMERGENCY' },
+      { label: '4. Administrative & Compliance Logs', nextNode: 'ADMIN' },
+    ]
+  },
+  INCIDENTS: {
+    text: 'Module: Incident Reporting & Analysis\nCurrent active incidents: 142.\nWhat would you like to view?',
+    options: [
+      { label: 'View highest severity hotspots', nextNode: 'INCIDENTS_HIGH' },
+      { label: 'View recent sensor anomalies', nextNode: 'INCIDENTS_ANOMALIES' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  INCIDENTS_HIGH: {
+    text: 'Top 3 Highest Severity Hotspots:\n1. Wazirpur Industrial (AQI 412) - Metal Finishing Units\n2. Sarai Kale Khan (AQI 284) - Heavy Vehicle Idling\n3. Okhla Phase II (AQI 275) - Waste Burning\n\nRecommend deploying Mist Cannons to these zones.',
+    options: [
+      { label: 'Initiate deployment simulator', nextNode: 'EMERGENCY_DEPLOY' },
+      { label: 'Return to Incident Menu', nextNode: 'INCIDENTS' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  INCIDENTS_ANOMALIES: {
+    text: 'Recent Sensor Anomalies:\n- DPCC Sensor #44 (Anand Vihar): PM10 spiked 40% in last hour.\n- Citizen Report #992 (Dwarka): Suspected garbage burning.\nAll anomalies are currently being verified by ground teams.',
+    options: [
+      { label: 'Return to Incident Menu', nextNode: 'INCIDENTS' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  PREDICTIONS: {
+    text: 'Module: Predictive Modeling & AQI\nOur fused AI models indicate a 15% increase in particulate matter over the next 4 hours due to wind stagnation.',
+    options: [
+      { label: 'View 24-hour AQI trajectory', nextNode: 'PREDICTIONS_24H' },
+      { label: 'Analyze intervention impact', nextNode: 'PREDICTIONS_IMPACT' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  PREDICTIONS_24H: {
+    text: '24-Hour Trajectory:\n00:00 - 04:00: Stable (AQI 310)\n04:00 - 08:00: Peak (AQI 380) due to inversion layer\n08:00 - 12:00: Gradual decline (AQI 340)\n\nRecommend preemptive traffic diversions before 04:00.',
+    options: [
+      { label: 'Return to Predictions Menu', nextNode: 'PREDICTIONS' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  PREDICTIONS_IMPACT: {
+    text: 'Intervention Impact Analysis:\n- Mist Cannons: -18% AQI locally\n- Traffic Diversion: -12% AQI locally\n- Industrial Halt: -35% AQI locally',
+    options: [
+      { label: 'Return to Predictions Menu', nextNode: 'PREDICTIONS' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  EMERGENCY: {
+    text: 'Module: Emergency Municipal Response\nWARNING: Active hotspots detected. Immediate action recommended.',
+    options: [
+      { label: 'Deploy Municipal Assets', nextNode: 'EMERGENCY_DEPLOY' },
+      { label: 'Issue Public Health Warning', nextNode: 'EMERGENCY_WARNING' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  EMERGENCY_DEPLOY: {
+    text: 'Asset Deployment Protocol:\nSelect asset to initiate simulated placement on Live Map:',
+    options: [
+      { label: 'Deploy Mist Cannons', nextNode: 'EMERGENCY_CONFIRM' },
+      { label: 'Initiate Traffic Diversion', nextNode: 'EMERGENCY_CONFIRM' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  EMERGENCY_CONFIRM: {
+    text: 'Action logged. Please navigate to the "Live Map" tab and use the Intervention Simulator to place assets physically on the map.',
+    options: [
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  EMERGENCY_WARNING: {
+    text: 'Public Health Warning drafted for NCR region. SMS and App notifications are queued for 2.4 million residents.\nStatus: Pending Admin Approval.',
+    options: [
+      { label: 'Return to Emergency Menu', nextNode: 'EMERGENCY' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  ADMIN: {
+    text: 'Module: Administrative & Compliance Logs\nSystem is operating at 99.9% uptime. 4 compliance reports generated this week.',
+    options: [
+      { label: 'View Audit Trail metrics', nextNode: 'ADMIN_AUDIT' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  },
+  ADMIN_AUDIT: {
+    text: 'Audit Metrics:\n- Total Interventions: 42\n- Average Response Time: 14 mins\n- Regulatory Compliance: 100%\nFor detailed PDF reports, visit the "Reports" tab.',
+    options: [
+      { label: 'Return to Admin Menu', nextNode: 'ADMIN' },
+      { label: 'Return to Main Menu', nextNode: 'ROOT' }
+    ]
+  }
+};
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [actionStates, setActionStates] = useState<Record<string, string>>({})
@@ -35,8 +140,8 @@ export default function Dashboard() {
   
   const [simResult, setSimResult] = useState<any>(null);
   const [predictedIncidents, setPredictedIncidents] = useState<any[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<any[]>([{role: 'assistant', content: 'VISTA Copilot initialized. How can I assist you with urban intelligence today?'}]);
+  const [chatNode, setChatNode] = useState('ROOT');
+  const [chatHistory, setChatHistory] = useState<any[]>([{role: 'assistant', content: copilotTree['ROOT'].text}]);
 
   const generateReport = async () => {
     setReportStep(2);
@@ -51,24 +156,6 @@ export default function Dashboard() {
       setReportStep(3);
     } catch(e) {
       setReportStep(0);
-    }
-  }
-
-  const sendChat = async () => {
-    if(!chatInput) return;
-    const newHist = [...chatHistory, {role: 'user', content: chatInput}];
-    setChatHistory(newHist);
-    setChatInput('');
-    try {
-      const res = await fetch('/api/copilot/ask', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({query: chatInput})
-      });
-      const data = await res.json();
-      setChatHistory([...newHist, {role: 'assistant', content: data.response}]);
-    } catch(e) {
-      console.error(e);
     }
   }
 
@@ -765,23 +852,24 @@ export default function Dashboard() {
                       ))}
                     </div>
                     <div className="p-4 bg-[#102034]/90 backdrop-blur-md border-t border-[#404848]">
-                      <div className="relative">
-                        <textarea 
-                          value={chatInput}
-                          onChange={e => setChatInput(e.target.value)}
-                          className="w-full bg-[#0b1c30] border border-[#404848] rounded-xl p-4 text-sm text-white outline-none resize-none focus:border-[#9dd0cd]/50 transition-colors shadow-inner" 
-                          placeholder="Ask the AI Copilot to analyze data..." 
-                          rows={1}
-                          onKeyDown={async (e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              sendChat();
-                            }
-                          }}
-                        ></textarea>
-                        <button onClick={sendChat} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-[#9dd0cd] text-[#003735] rounded-lg flex items-center justify-center hover:brightness-110 transition-all shadow-lg">
-                          <Search size={18} />
-                        </button>
+                      <div className="flex flex-col gap-2">
+                        {copilotTree[chatNode]?.options.map((opt, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => {
+                              const nextNodeData = copilotTree[opt.nextNode];
+                              setChatHistory(prev => [
+                                ...prev,
+                                { role: 'user', content: opt.label },
+                                { role: 'assistant', content: nextNodeData.text }
+                              ]);
+                              setChatNode(opt.nextNode);
+                            }}
+                            className="w-full text-left bg-[#0b1c30] border border-[#404848] rounded-xl p-4 text-sm text-[#9dd0cd] hover:bg-[#1b2b3f] hover:border-[#9dd0cd]/50 transition-colors shadow-inner font-bold"
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                 </div>
