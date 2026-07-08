@@ -1,11 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from core.database import engine, Base
+from sqlalchemy import text
 import os
+
+# Import models so Base.metadata knows about them
+from models.user import User
+from models.incident import Incident
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
 app = FastAPI(
     title="VISTA API",
     description="Visual Intelligence for Spatial Toxicity Assessment",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS setup

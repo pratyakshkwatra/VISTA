@@ -22,11 +22,19 @@ export default function LoginPage() {
         body: JSON.stringify({ phone_number: phoneNumber, otp: otp })
       })
       
-      const data = await res.json()
-      
       if (!res.ok) {
-        throw new Error(data.detail || 'Login failed')
+        let errorMsg = 'Login failed (Server error)';
+        try {
+          const data = await res.json();
+          errorMsg = data.detail || errorMsg;
+        } catch (e) {
+          const text = await res.text().catch(() => '');
+          if (text) errorMsg += `: ${text}`;
+        }
+        throw new Error(errorMsg);
       }
+      
+      const data = await res.json();
       
       // Store token (in localstorage for MVP)
       localStorage.setItem('vista_token', data.access_token)
