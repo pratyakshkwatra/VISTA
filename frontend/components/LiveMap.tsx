@@ -19,15 +19,17 @@ interface LiveMapProps {
   coords: [number, number];
   zoom: number;
   liveIncidents: Incident[];
+  activeInterventions?: {type: string, lat: number, lng: number}[];
   onIncidentClick?: (inc: Incident) => void;
+  onMapClick?: (coords: [number, number]) => void;
 }
 
-export default function LiveMap({ timelineFactor, showPredictions, coords, zoom, liveIncidents, onIncidentClick }: LiveMapProps) {
+export default function LiveMap({ timelineFactor, showPredictions, coords, zoom, liveIncidents, activeInterventions = [], onIncidentClick, onMapClick }: LiveMapProps) {
   const [viewState, setViewState] = useState({
     longitude: coords[1],
     latitude: coords[0],
     zoom: zoom - 1, // DeckGL zoom is slightly different
-    pitch: 45,
+    pitch: 0,
     bearing: 0
   });
 
@@ -46,9 +48,8 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
       id: 'heatmap',
       data,
       pickable: true,
-      extruded: true,
+      extruded: false,
       radius: 2000,
-      elevationScale: showPredictions ? 20 : 50,
       getPosition: (d: any) => d.position,
       getElevationValue: (points: any[]) => {
          return points.reduce((acc, pt) => acc + (pt.confidence || 1), 0);
@@ -65,7 +66,6 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
           ],
       opacity: 0.8,
       transitions: {
-        elevationScale: 2000,
         getFillColor: 2000,
       }
     }),
@@ -88,6 +88,21 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
           onIncidentClick(info.object);
         }
       }
+    }),
+    new ScatterplotLayer({
+      id: 'interventions',
+      data: activeInterventions.map(i => ({ position: [i.lng, i.lat], ...i })),
+      pickable: true,
+      opacity: 0.9,
+      stroked: true,
+      filled: true,
+      radiusScale: 100,
+      radiusMinPixels: 6,
+      radiusMaxPixels: 25,
+      lineWidthMinPixels: 3,
+      getPosition: (d: any) => d.position,
+      getFillColor: [157, 208, 205], // #9dd0cd
+      getLineColor: [0, 55, 53],
     })
   ];
 
@@ -98,12 +113,20 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
         controller={true}
         layers={layers}
         onViewStateChange={(e: any) => setViewState(e.viewState)}
+        onClick={(e: any) => {
+          if (onMapClick && e.coordinate) {
+            onMapClick(e.coordinate as [number, number]);
+          }
+        }}
         getTooltip={(info: any) => {
           if (info.layer?.id === 'markers' && info.object) {
              return info.object.description || 'Incident';
           }
           if (info.layer?.id === 'heatmap' && info.object) {
              return `Density: ${info.object.points.length} Reports`;
+          }
+          if (info.layer?.id === 'interventions' && info.object) {
+             return `Intervention: ${info.object.type}`;
           }
           return null;
         }}

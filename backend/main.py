@@ -13,6 +13,16 @@ from core.database import AsyncSessionLocal
 from models.user import User
 from models.incident import Incident
 
+MAJOR_CITIES = [
+    (28.6139, 77.2090), # Delhi
+    (19.0760, 72.8777), # Mumbai
+    (12.9716, 77.5946), # Bangalore
+    (13.0827, 80.2707), # Chennai
+    (22.5726, 88.3639), # Kolkata
+    (23.0225, 72.5714), # Ahmedabad
+    (17.3850, 78.4867)  # Hyderabad
+]
+
 async def background_seeder():
     # Wait for tables to be created
     await asyncio.sleep(2)
@@ -26,9 +36,10 @@ async def background_seeder():
             # Seed 100 initial incidents in Delhi NCR
             print("Seeding initial incidents data...")
             incidents_to_add = []
-            for _ in range(100):
-                lat = 28.6139 + random.uniform(-0.15, 0.15)
-                lng = 77.2090 + random.uniform(-0.15, 0.15)
+            for _ in range(200):
+                base_lat, base_lng = random.choice(MAJOR_CITIES)
+                lat = base_lat + random.uniform(-0.5, 0.5)
+                lng = base_lng + random.uniform(-0.5, 0.5)
                 wkt_point = f"POINT({lng} {lat})"
                 inc = Incident(
                     description=f"Auto-generated incident",
@@ -43,14 +54,15 @@ async def background_seeder():
                 incidents_to_add.append(inc)
             session.add_all(incidents_to_add)
             await session.commit()
-            print("Successfully seeded 100 incidents.")
+            print("Successfully seeded 200 incidents across India.")
             
     # Real-time simulation loop
     while True:
         await asyncio.sleep(random.uniform(1.0, 4.0))
         async with AsyncSessionLocal() as session:
-            lat = 28.6139 + random.uniform(-0.2, 0.2)
-            lng = 77.2090 + random.uniform(-0.2, 0.2)
+            base_lat, base_lng = random.choice(MAJOR_CITIES)
+            lat = base_lat + random.uniform(-0.8, 0.8)
+            lng = base_lng + random.uniform(-0.8, 0.8)
             wkt_point = f"POINT({lng} {lat})"
             
             p_type = random.choice(["Smoke", "Dust", "Industrial", "Vehicle Emissions"])

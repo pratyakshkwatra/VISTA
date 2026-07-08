@@ -131,6 +131,8 @@ class SimulationRequest(BaseModel):
     district: str
     intervention_type: str
     current_aqi: int = 382
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 @router.post("/simulate")
 async def simulate_impact(req: SimulationRequest):
@@ -168,15 +170,25 @@ async def get_history(hours_ago: int = 0, db: AsyncSession = Depends(get_db)):
     } for i in incidents[start_idx:start_idx+50]]
 
 @router.get("/predict")
-async def get_predictions(db: AsyncSession = Depends(get_db)):
+async def get_predictions(lat: Optional[float] = None, lng: Optional[float] = None, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Incident).order_by(Incident.created_at.desc()).limit(20))
     incidents = result.scalars().all()
     predictions = []
-    for i in incidents:
-        predictions.append({
-            "lat": i.latitude + random.uniform(-0.03, 0.03),
-            "lng": i.longitude + random.uniform(-0.03, 0.03),
-            "confidence": 0.95,
-            "type": "Predicted Risk"
-        })
+    
+    if lat is not None and lng is not None:
+        for _ in range(10):
+            predictions.append({
+                "lat": lat + random.uniform(-0.04, 0.04),
+                "lng": lng + random.uniform(-0.04, 0.04),
+                "confidence": 0.95,
+                "type": "Predicted Risk (Post-Intervention)"
+            })
+    else:
+        for i in incidents:
+            predictions.append({
+                "lat": i.latitude + random.uniform(-0.03, 0.03),
+                "lng": i.longitude + random.uniform(-0.03, 0.03),
+                "confidence": 0.95,
+                "type": "Predicted Risk"
+            })
     return predictions

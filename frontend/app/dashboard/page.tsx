@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [selectedDistrict, setSelectedDistrict] = useState('All India')
   const [showSimulator, setShowSimulator] = useState(false)
   const [activeIncident, setActiveIncident] = useState<any>(null)
+  const [activeInterventions, setActiveInterventions] = useState<{type: string, lat: number, lng: number}[]>([])
+  const [placingInterventionType, setPlacingInterventionType] = useState('')
   
   const [simResult, setSimResult] = useState<any>(null);
   const [predictedIncidents, setPredictedIncidents] = useState<any[]>([]);
@@ -97,7 +99,7 @@ export default function Dashboard() {
   }, [historicalDay])
 
   useEffect(() => {
-    if (showPredictions) {
+    if (showPredictions && !placingInterventionType && activeInterventions.length === 0) {
       fetch('/api/incidents/predict')
         .then(r => r.json())
         .then(data => setPredictedIncidents(data));
@@ -425,7 +427,32 @@ export default function Dashboard() {
                     coords={activeCoords} 
                     zoom={activeZoom} 
                     liveIncidents={showPredictions ? [...incidents, ...predictedIncidents] : incidents}
+                    activeInterventions={activeInterventions}
                     onIncidentClick={(inc: any) => setActiveIncident(inc)}
+                    onMapClick={async (coords: [number, number]) => {
+                      if (placingInterventionType) {
+                        const newIntervention = { type: placingInterventionType, lat: coords[1], lng: coords[0] };
+                        setActiveInterventions(prev => [...prev, newIntervention]);
+                        try {
+                          const res = await fetch('/api/incidents/simulate', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ district: selectedDistrict, intervention_type: placingInterventionType, current_aqi: 382, lat: coords[1], lng: coords[0] })
+                          });
+                          const data = await res.json();
+                          setSimResult(data);
+                          setSelectedInterv(placingInterventionType);
+                          setInterventionStep(3);
+                          setPlacingInterventionType('');
+                          
+                          // Trigger predict update based on intervention
+                          const predRes = await fetch(`/api/incidents/predict?lat=${coords[1]}&lng=${coords[0]}`);
+                          const predData = await predRes.json();
+                          setPredictedIncidents(predData);
+                          setShowPredictions(true);
+                        } catch(e) { setInterventionStep(3); setPlacingInterventionType(''); }
+                      }
+                    }}
                   />
                 </div>
                 
@@ -525,25 +552,24 @@ export default function Dashboard() {
                               <h3 className="text-xs font-bold text-[#d3e4fe] uppercase tracking-widest mb-4">Select Municipal Action</h3>
                               <div className="space-y-2">
                                 {['Deploy Mist Cannons', 'Traffic Diversion', 'Industrial Halt', 'Deploy Enforcement Team'].map(a => (
-                                  <button key={a} onClick={async () => {
-                                    setSelectedInterv(a); 
+                                  <button key={a} onClick={() => {
+                                    setPlacingInterventionType(a); 
                                     setInterventionStep(2);
-                                    try {
-                                        const res = await fetch('/api/incidents/simulate', {
-                                            method: 'POST',
-                                            headers: {'Content-Type': 'application/json'},
-                                            body: JSON.stringify({ district: selectedDistrict, intervention_type: a, current_aqi: 382 })
-                                        });
-                                        const data = await res.json();
-                                        setSimResult(data);
-                                        setInterventionStep(3);
-                                        setShowPredictions(true);
-                                    } catch(e) { setInterventionStep(3); }
                                   }} className="w-full p-3 border text-left rounded transition-colors border-[#404848] hover:border-[#9dd0cd]/50 text-[#c0c8c7] text-sm">
                                     {a}
                                   </button>
                                 ))}
                               </div>
+                            </motion.div>
+                          )}
+                          {interventionStep === 2 && (
+                            <motion.div key="step2" initial={{x: 20, opacity: 0}} animate={{x: 0, opacity: 1}} exit={{x: -20, opacity: 0}} className="text-center py-8">
+                              <div className="w-16 h-16 rounded-full border border-[#ffb4ab] bg-[#ffb4ab]/10 flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                <MapIcon size={24} className="text-[#ffb4ab]" />
+                              </div>
+                              <h3 className="text-sm font-bold text-white mb-2">Placement Mode Active</h3>
+                              <p className="text-[#c0c8c7] text-xs">Click anywhere on the map to deploy <span className="font-bold text-[#ffb4ab]">{placingInterventionType}</span>.</p>
+                              <button onClick={() => {setInterventionStep(1); setPlacingInterventionType('');}} className="mt-6 text-[#8a9291] hover:text-white text-[10px] uppercase tracking-widest font-bold">Cancel</button>
                             </motion.div>
                           )}
                           {interventionStep === 3 && (
@@ -563,7 +589,7 @@ export default function Dashboard() {
                                   <span className="text-sm font-bold text-[#9dd0cd]">{simResult?.predicted_aqi || 315} (-{simResult?.drop_percentage || 18}%)</span>
                                 </div>
                               </div>
-                              <button onClick={() => {setInterventionStep(1); setSelectedInterv('');}} className="w-full py-2 bg-[#1b2b3f] text-[#c0c8c7] border border-[#404848] rounded hover:text-white transition-colors uppercase font-bold text-[10px] tracking-widest">Run New Simulation</button>
+                              <button onClick={() => {setInterventionStep(1); setSelectedInterv(''); setPlacingInterventionType('');}} className="w-full py-2 bg-[#1b2b3f] text-[#c0c8c7] border border-[#404848] rounded hover:text-white transition-colors uppercase font-bold text-[10px] tracking-widest">Run New Simulation</button>
                             </motion.div>
                           )}
                         </AnimatePresence>
