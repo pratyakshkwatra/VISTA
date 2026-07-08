@@ -97,7 +97,7 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
         viewState={viewState}
         controller={true}
         layers={layers}
-        onViewStateChange={e => setViewState(e.viewState as any)}
+        onViewStateChange={(e: any) => setViewState(e.viewState)}
         getTooltip={(info: any) => {
           if (info.layer?.id === 'markers' && info.object) {
              return info.object.description || 'Incident';

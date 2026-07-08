@@ -238,7 +238,8 @@ export default function Dashboard() {
             </div>
             <button className="text-[#c0c8c7] hover:bg-[#26364a] p-2 rounded transition-colors"><Bell size={20}/></button>
             <div className="w-8 h-8 rounded border border-[#404848] overflow-hidden ml-2">
-              <img className="w-full h-full object-cover" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"/>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="User profile" className="w-full h-full object-cover" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"/>
             </div>
           </div>
         </header>
