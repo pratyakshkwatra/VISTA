@@ -11,7 +11,7 @@ app = FastAPI(
 # CORS setup
 origins = [
     "http://localhost",
-    "http://localhost:3000",
+    "http://localhost:3005",
 ]
 if os.getenv("NEXT_PUBLIC_API_URL"):
     origins.append(os.getenv("NEXT_PUBLIC_API_URL"))

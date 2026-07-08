@@ -3,7 +3,8 @@ import { useState, useMemo } from 'react';
 import Map from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { DeckGL } from '@deck.gl/react';
-import { HexagonLayer, ScatterplotLayer } from '@deck.gl/aggregation-layers';
+import { HexagonLayer } from '@deck.gl/aggregation-layers';
+import { ScatterplotLayer } from '@deck.gl/layers';
 
 interface Incident {
   lat: number;
