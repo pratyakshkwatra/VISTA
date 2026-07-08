@@ -536,6 +536,7 @@ export default function Dashboard() {
                                         const data = await res.json();
                                         setSimResult(data);
                                         setInterventionStep(3);
+                                        setShowPredictions(true);
                                     } catch(e) { setInterventionStep(3); }
                                   }} className="w-full p-3 border text-left rounded transition-colors border-[#404848] hover:border-[#9dd0cd]/50 text-[#c0c8c7] text-sm">
                                     {a}

@@ -48,7 +48,7 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
       pickable: true,
       extruded: true,
       radius: 2000,
-      elevationScale: 50,
+      elevationScale: showPredictions ? 20 : 50,
       getPosition: (d: any) => d.position,
       getElevationValue: (points: any[]) => {
          return points.reduce((acc, pt) => acc + (pt.confidence || 1), 0);
@@ -65,7 +65,8 @@ export default function LiveMap({ timelineFactor, showPredictions, coords, zoom,
           ],
       opacity: 0.8,
       transitions: {
-        elevationScale: 1000
+        elevationScale: 2000,
+        getFillColor: 2000,
       }
     }),
     new ScatterplotLayer({
