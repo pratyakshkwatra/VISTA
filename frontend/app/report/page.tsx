@@ -87,10 +87,8 @@ export default function ReportPage() {
                       <iframe 
                         width="100%" 
                         height="100%" 
-                        frameBorder="0" 
+                        style={{ border: 0 }}
                         scrolling="no" 
-                        marginHeight={0} 
-                        marginWidth={0} 
                         src="/map.html"
                         className="absolute inset-0 z-0 opacity-80"
                       ></iframe>
@@ -151,7 +149,7 @@ export default function ReportPage() {
                     onClick={async () => {
                       if (step === totalSteps) {
                         try {
-                          await fetch('http://localhost:8000/incidents/report', {
+                          await fetch('/api/incidents/report', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ description: "Citizen report (mock)", latitude: 28.6139, longitude: 77.2090 })

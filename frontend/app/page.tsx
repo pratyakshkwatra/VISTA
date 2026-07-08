@@ -124,10 +124,8 @@ export default function Home() {
               <iframe 
                 width="100%" 
                 height="100%" 
-                frameBorder="0" 
+                style={{ border: 0 }}
                 scrolling="no" 
-                marginHeight={0} 
-                marginWidth={0} 
                 src="/map.html" 
                 className="opacity-90 hover:opacity-100 transition-opacity duration-500"
               ></iframe>
